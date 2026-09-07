@@ -115,59 +115,50 @@ void Mapper::processImu()
 
 
 
-bool LIVMapper::sync_packages(LidarMeasureGroup &meas)
+bool Mapper::sync_packages(MeasureGroup &meas)
 {
-  // PCAP 模式下现在有两个独立 producer：
-  //   pcap_thread  -> lid_raw_data_buffer / imu_buffer
-  //   image_thread -> img_buffer / img_time_buffer
-  // 主线程在这里同时读取并 pop，因此一次同步决策期间统一持有 mtx_buffer。
+
   std::unique_lock<std::mutex> lock(mtx_buffer);
 
-
-  case ONLY_LIO:
-  {
-    // ONLY_LIO 当前步骤必须有 LiDAR；启用 IMU 时还必须有 IMU。
     if (lid_raw_data_buffer.empty() || lid_header_time_buffer.empty())
     {
-      return false;
+        return false;
     }
 
     if (imu_en && imu_buffer.empty())
     {
-      return false;
+        return false;
     }
 
     if (meas.last_lio_update_time < 0.0)
     {
-      meas.last_lio_update_time = lid_header_time_buffer.front();
+        meas.last_lio_update_time = lid_header_time_buffer.front();
     }
 
     if (!lidar_pushed)
     {
-      meas.lidar = lid_raw_data_buffer.front();
+        meas.lidar = lid_raw_data_buffer.front();
 
-      if (!meas.lidar || meas.lidar->points.size() <= 1)
-      {
+        if (!meas.lidar || meas.lidar->points.size() <= 1)
+        {
         // 无效帧直接丢掉，否则会永远卡在同一帧。
         lid_raw_data_buffer.pop_front();
         lid_header_time_buffer.pop_front();
         sig_buffer.notify_all();
         return false;
-      }
+        }
 
-      meas.lidar_frame_beg_time = lid_header_time_buffer.front();
-      meas.lidar_frame_end_time =
-        meas.lidar_frame_beg_time +
-        meas.lidar->points.back().curvature / 1000.0;
+        meas.lidar_frame_beg_time = lid_header_time_buffer.front();
+        meas.lidar_frame_end_time = meas.lidar_frame_beg_time + meas.lidar->points.back().curvature / 1000.0;
 
-      meas.pcl_proc_cur = meas.lidar;
-      lidar_pushed = true;
+        meas.pcl_proc_cur = meas.lidar;
+        lidar_pushed = true;
     }
 
     // 等待 IMU 时间覆盖当前 LiDAR 帧末尾。
     if (imu_en && last_timestamp_imu < meas.lidar_frame_end_time)
     {
-      return false;
+        return false;
     }
 
     struct MeasureGroup m;
@@ -176,172 +167,141 @@ bool LIVMapper::sync_packages(LidarMeasureGroup &meas)
 
     while (imu_en && !imu_buffer.empty())
     {
-      if (stamp2Sec(imu_buffer.front()->header.stamp) >
-          meas.lidar_frame_end_time)
-      {
+        if (stamp2Sec(imu_buffer.front()->header.stamp) >
+            meas.lidar_frame_end_time)
+        {
         break;
-      }
+        }
 
-      m.imu.push_back(imu_buffer.front());
-      imu_buffer.pop_front();
+        m.imu.push_back(imu_buffer.front());
+        imu_buffer.pop_front();
     }
 
     lid_raw_data_buffer.pop_front();
     lid_header_time_buffer.pop_front();
 
-    meas.lio_vio_flg = LIO;
     meas.measures.push_back(m);
     lidar_pushed = false;
 
     sig_buffer.notify_all();
     return true;
-  }
-
-    case LIO:
-    {
-      // LIO -> VIO 只消费刚才用于 LIO 时间切分的同一张图。
-      // 这一阶段不再强制要求 LiDAR/IMU buffer 非空，因此离线数据结尾
-      // 即使 PCAP 已经读完，也能完成最后一次 VIO。
-      if (img_buffer.empty() || img_time_buffer.empty())
-      {
-        return false;
-      }
-
-      const double img_capture_time =
-        img_time_buffer.front() + exposure_time_init;
-
-      meas.lio_vio_flg = VIO;
-      meas.measures.clear();
-
-      struct MeasureGroup m;
-      m.vio_time = img_capture_time;
-      m.lio_time = meas.last_lio_update_time;
-      m.img = img_buffer.front();
-
-      img_buffer.pop_front();
-      img_time_buffer.pop_front();
-
-      meas.measures.push_back(m);
-      lidar_pushed = false;
-
-      sig_buffer.notify_all();
-      return true;
-    }
-
-    default:
-      return false;
-    }
-  }
 
 }
 
 void Mapper::handleLIO() 
 {    
-  euler_cur = RotMtoEuler(_state.rot_end);
-  
-  if (feats_undistort->empty() || (feats_undistort == nullptr)) 
-  {
+    euler_cur = RotMtoEuler(_state.rot_end);
+
+    if (feats_undistort->empty() || (feats_undistort == nullptr)) 
+    {
     LOG(ERROR) << "[ LIO ]: No point!!!";
     return;
-  }
+    }
 
     double t0 = omp_get_wtime();
 
-  downSizeFilterSurf.setInputCloud(feats_undistort);
-  downSizeFilterSurf.filter(*feats_down_body);
+    downSizeFilterSurf.setInputCloud(feats_undistort);
+    downSizeFilterSurf.filter(*feats_down_body);
+
     double t_down = omp_get_wtime();
 
-  feats_down_size = feats_down_body->points.size();
-  voxelmap_manager->feats_down_body_ = feats_down_body;
-  transformLidar(_state.rot_end, _state.pos_end, feats_down_body, feats_down_world);
-  voxelmap_manager->feats_down_world_ = feats_down_world;
-  voxelmap_manager->feats_down_size_ = feats_down_size;
+    feats_down_size = feats_down_body->points.size();
+    voxelmap_manager->feats_down_body_ = feats_down_body;
+
+    transformLidar(_state.rot_end, _state.pos_end, feats_down_body, feats_down_world);
+    voxelmap_manager->feats_down_world_ = feats_down_world;
+    voxelmap_manager->feats_down_size_ = feats_down_size;
 
     if (!lidar_map_inited) 
-  {
-    lidar_map_inited = true;
-    voxelmap_manager->BuildVoxelMap();
-  }
+    {
+        lidar_map_inited = true;
+        voxelmap_manager->BuildVoxelMap();
+    }
 
-  double t1 = omp_get_wtime();
+    double t1 = omp_get_wtime();
 
-  voxelmap_manager->StateEstimation(state_propagat);
-  _state = voxelmap_manager->state_;
-  _pv_list = voxelmap_manager->pv_list_;
+    voxelmap_manager->StateEstimation(state_propagat);
+    
+    _state = voxelmap_manager->state_;
+    _pv_list = voxelmap_manager->pv_list_;
 
-  double t2 = omp_get_wtime();
+    double t2 = omp_get_wtime();
 
-  if (imu_prop_enable) 
-  {
-    ekf_finish_once = true;
-    latest_ekf_state = _state;
-    latest_ekf_time = LidarMeasures.last_lio_update_time;
-    state_update_flg = true;
-  }
-
-
-  euler_cur = RotMtoEuler(_state.rot_end);
-  geoQuat = tf::createQuaternionMsgFromRollPitchYaw(euler_cur(0), euler_cur(1), euler_cur(2));
+    if (imu_prop_enable) 
+    {
+        ekf_finish_once = true;
+        latest_ekf_state = _state;
+        latest_ekf_time = LidarMeasures.last_lio_update_time;
+        state_update_flg = true;
+    }
 
 
-  double t3 = omp_get_wtime();
-
-  PointCloudXYZI::Ptr world_lidar(new PointCloudXYZI());
-  transformLidar(_state.rot_end, _state.pos_end, feats_down_body, world_lidar);
-  for (size_t i = 0; i < world_lidar->points.size(); i++) 
-  {
-    voxelmap_manager->pv_list_[i].point_w << world_lidar->points[i].x, world_lidar->points[i].y, world_lidar->points[i].z;
-    M3D point_crossmat = voxelmap_manager->cross_mat_list_[i];
-    M3D var = voxelmap_manager->body_cov_list_[i];
-    var = (_state.rot_end * extR) * var * (_state.rot_end * extR).transpose() +
-          (-point_crossmat) * _state.cov.block<3, 3>(0, 0) * (-point_crossmat).transpose() + _state.cov.block<3, 3>(3, 3);
-    voxelmap_manager->pv_list_[i].var = var;
-  }
-  voxelmap_manager->UpdateVoxelMap(voxelmap_manager->pv_list_);
-  std::cout << "[ LIO ] Update Voxel Map" << std::endl;
-  _pv_list = voxelmap_manager->pv_list_;
-  
-  double t4 = omp_get_wtime();
-
-  if(voxelmap_manager->config_setting_.map_sliding_en)
-  {
-    voxelmap_manager->mapSliding();
-  }
+    euler_cur = RotMtoEuler(_state.rot_end);
+    geoQuat = tf::createQuaternionMsgFromRollPitchYaw(euler_cur(0), euler_cur(1), euler_cur(2));
 
 
-  PointCloudXYZI::Ptr laserCloudFullRes(dense_map_en ? feats_undistort : feats_down_body);
-  int size = laserCloudFullRes->points.size();
-  PointCloudXYZI::Ptr laserCloudWorld(new PointCloudXYZI(size, 1));
+    double t3 = omp_get_wtime();
 
-  for (int i = 0; i < size; i++) 
-  {
-    RGBpointBodyToWorld(&laserCloudFullRes->points[i], &laserCloudWorld->points[i]);
-  }
-  *pcl_w_wait_pub = *laserCloudWorld;
+    PointCloudXYZI::Ptr world_lidar(new PointCloudXYZI());
+    transformLidar(_state.rot_end, _state.pos_end, feats_down_body, world_lidar);
+    for (size_t i = 0; i < world_lidar->points.size(); i++) 
+    {
+        voxelmap_manager->pv_list_[i].point_w << world_lidar->points[i].x, world_lidar->points[i].y, world_lidar->points[i].z;
+        M3D point_crossmat = voxelmap_manager->cross_mat_list_[i];
+        M3D var = voxelmap_manager->body_cov_list_[i];
+        var = (_state.rot_end * extR) * var * (_state.rot_end * extR).transpose() +
+            (-point_crossmat) * _state.cov.block<3, 3>(0, 0) * (-point_crossmat).transpose() + _state.cov.block<3, 3>(3, 3);
+        voxelmap_manager->pv_list_[i].var = var;
+    }
 
-  publish_frame_world(pubLaserCloudFullRes, vio_manager);
-  if (pub_effect_point_en) publish_effect_world(pubLaserCloudEffect, voxelmap_manager->ptpl_list_);
-  if (voxelmap_manager->config_setting_.is_pub_plane_map_) voxelmap_manager->pubVoxelMap();
+    
+    voxelmap_manager->UpdateVoxelMap(voxelmap_manager->pv_list_);
+    LOG(INFO) << "[ LIO ] Update Voxel Map";
+    _pv_list = voxelmap_manager->pv_list_;
+    
+    double t4 = omp_get_wtime();
 
-  frame_num++;
-  aver_time_consu = aver_time_consu * (frame_num - 1) / frame_num + (t4 - t0) / frame_num;
-  printf("\033[1;34m+-------------------------------------------------------------+\033[0m\n");
-  printf("\033[1;34m|                         LIO Mapping Time                    |\033[0m\n");
-  printf("\033[1;34m+-------------------------------------------------------------+\033[0m\n");
-  printf("\033[1;34m| %-29s | %-27s |\033[0m\n", "Algorithm Stage", "Time (secs)");
-  printf("\033[1;34m+-------------------------------------------------------------+\033[0m\n");
-  printf("\033[1;36m| %-29s | %-27f |\033[0m\n", "DownSample", t_down - t0);
-  printf("\033[1;36m| %-29s | %-27f |\033[0m\n", "ICP", t2 - t1);
-  printf("\033[1;36m| %-29s | %-27f |\033[0m\n", "updateVoxelMap", t4 - t3);
-  printf("\033[1;34m+-------------------------------------------------------------+\033[0m\n");
-  printf("\033[1;36m| %-29s | %-27f |\033[0m\n", "Current Total Time", t4 - t0);
-  printf("\033[1;36m| %-29s | %-27f |\033[0m\n", "Average Total Time", aver_time_consu);
-  printf("\033[1;34m+-------------------------------------------------------------+\033[0m\n");
+    if(voxelmap_manager->config_setting_.map_sliding_en)
+    {
+        voxelmap_manager->mapSliding();
+    }
 
-  euler_cur = RotMtoEuler(_state.rot_end);
-  fout_out << std::setw(20) << LidarMeasures.last_lio_update_time - _first_lidar_time << " " << euler_cur.transpose() * 57.3 << " "
-            << _state.pos_end.transpose() << " " << _state.vel_end.transpose() << " " << _state.bias_g.transpose() << " "
-            << _state.bias_a.transpose() << " " << V3D(_state.inv_expo_time, 0, 0).transpose() << " " << feats_undistort->points.size() << std::endl;
+
+    PointCloudXYZI::Ptr laserCloudFullRes(dense_map_en ? feats_undistort : feats_down_body);
+    int size = laserCloudFullRes->points.size();
+    PointCloudXYZI::Ptr laserCloudWorld(new PointCloudXYZI(size, 1));
+
+    for (int i = 0; i < size; i++) 
+    {
+        RGBpointBodyToWorld(&laserCloudFullRes->points[i], &laserCloudWorld->points[i]);
+    }
+    *pcl_w_wait_pub = *laserCloudWorld;
+
+    publish_frame_world(pubLaserCloudFullRes, vio_manager);
+    if (pub_effect_point_en) publish_effect_world(pubLaserCloudEffect, voxelmap_manager->ptpl_list_);
+    if (voxelmap_manager->config_setting_.is_pub_plane_map_) voxelmap_manager->pubVoxelMap();
+
+    frame_num++;
+    aver_time_consu = aver_time_consu * (frame_num - 1) / frame_num + (t4 - t0) / frame_num;
+    printf("\033[1;34m+-------------------------------------------------------------+\033[0m\n");
+    printf("\033[1;34m|                         LIO Mapping Time                    |\033[0m\n");
+    printf("\033[1;34m+-------------------------------------------------------------+\033[0m\n");
+    printf("\033[1;34m| %-29s | %-27s |\033[0m\n", "Algorithm Stage", "Time (secs)");
+    printf("\033[1;34m+-------------------------------------------------------------+\033[0m\n");
+    printf("\033[1;36m| %-29s | %-27f |\033[0m\n", "DownSample", t_down - t0);
+    printf("\033[1;36m| %-29s | %-27f |\033[0m\n", "ICP", t2 - t1);
+    printf("\033[1;36m| %-29s | %-27f |\033[0m\n", "updateVoxelMap", t4 - t3);
+    printf("\033[1;34m+-------------------------------------------------------------+\033[0m\n");
+    printf("\033[1;36m| %-29s | %-27f |\033[0m\n", "Current Total Time", t4 - t0);
+    printf("\033[1;36m| %-29s | %-27f |\033[0m\n", "Average Total Time", aver_time_consu);
+    printf("\033[1;34m+-------------------------------------------------------------+\033[0m\n");
+
+    euler_cur = RotMtoEuler(_state.rot_end);
+    fout_out << std::setw(20) << LidarMeasures.last_lio_update_time - _first_lidar_time << " " << euler_cur.transpose() * 57.3 << " "
+                << _state.pos_end.transpose() << " " << _state.vel_end.transpose() << " " << _state.bias_g.transpose() << " "
+                << _state.bias_a.transpose() << " " << V3D(_state.inv_expo_time, 0, 0).transpose() << " " << feats_undistort->points.size() << std::endl;
+
+
 }
 
 
@@ -351,49 +311,82 @@ void Mapper::run()
   
     std::atomic<bool> pcap_finished{false};
 
-    // -----------------------------------------------------------------------
-    // Producer 1: PCAP -> LiDAR / IMU
-    // -----------------------------------------------------------------------
-    std::thread pcap_thread([this, &pcap_finished]() {
-      RCLCPP_INFO(this->node->get_logger(), "开始读取 PCAP LiDAR/IMU");
 
-      PcapIO pcap(pcap_file);
+    PcapIO pcap(pcap_file);
 
 
-        pcap.addPointCloud2Handle(
-          lid_topic,
-          [this](const sensor_msgs::msg::PointCloud2::ConstSharedPtr &m) {
-            standard_pcl_cbk(m);
-            return true;
-          });
+    pcap.addPointCloud2Handle(
+        lid_topic,
+        [this](PointCloudMsgPtr m) {
 
+        mtx_buffer.lock();
 
-        pcap.addIMUHandle(
-          imu_topic,
-          [this](const sensor_msgs::msg::Imu::ConstSharedPtr &m) {
-            imu_cbk(m);
-            return true;
-          });
-      
+        double cur_head_time = m->header.stamp.toSec();
 
-      pcap.go();
+        if (cur_head_time < last_timestamp_lidar)
+        {
+            LOG(ERROR) << "lidar loop back, clear buffer";
+            lid_raw_data_buffer.clear();
+        }
+        lid_raw_data_buffer_.push_back(m);
+        lid_header_time_buffer.push_back(cur_head_time);
+        lid_header_time_buffer.push_back(cur_head_time);
+        last_timestamp_lidar = cur_head_time;
+        mtx_buffer.unlock();
+        sig_buffer.notify_all();
+        })
+    .addIMUHandle(
+        imu_topic,
+        [this](const sensor_msgs::msg::Imu::ConstSharedPtr &m) {
 
-      pcap_finished.store(true, std::memory_order_release);
-      RCLCPP_INFO(this->node->get_logger(), "PCAP LiDAR/IMU 读取完成");
-      sig_buffer.notify_all();
-    });
+        double timestamp = m->header.stamp.toSec();
+
+        if (fabs(last_timestamp_lidar - timestamp) > 0.5 )
+        {
+            LOG(WARNING) << "IMU and LiDAR not synced! delta time: " << last_timestamp_lidar - timestamp;
+        };
+
+        mtx_buffer.lock();
+
+        if (last_timestamp_imu > 0.0 && timestamp < last_timestamp_imu)
+        {
+            mtx_buffer.unlock();
+            sig_buffer.notify_all();
+            LOG(ERROR) << "imu loop back, offset: " << last_timestamp_imu - timestamp;
+            return;
+        }
+
+        last_timestamp_imu = timestamp;
+        imu_buffer.push_back(m);
+        // cout<<"got imu: "<<timestamp<<" imu size "<<imu_buffer.size()<<endl;
+        mtx_buffer.unlock();
+        if (imu_prop_enable)
+        {
+            mtx_buffer_imu_prop.lock();
+            if (imu_prop_enable && !p_imu->imu_need_init) { prop_imu_buffer.push_back(*m); }
+            newest_imu = *m;
+            new_imu = true;
+            mtx_buffer_imu_prop.unlock();
+        }
+        sig_buffer.notify_all();
+        })
+    .go();
+
+    pcap_finished.store(true, std::memory_order_release);
+    LOG(INFO) << "PCAP LiDAR/IMU 读取完成";
+    sig_buffer.notify_all();
 
     rclcpp::Rate rate(5000);
 
     while (rclcpp::ok())
     {
-      if (!sync_packages(LidarMeasures))
+      if (!sync_packages(Measures))
       {
         const bool pcap_done =
           pcap_finished.load(std::memory_order_acquire);
 
 
-        if (pcap_done && image_done)
+        if (pcap_done)
         {
           LOG(INFO)<<"PCAP/RAW producer 已全部结束，当前 buffer 无法继续组成测量组，退出离线处理";
           break;

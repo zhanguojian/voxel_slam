@@ -6,8 +6,45 @@
 #include "udp_convert.h"
 
 
+class DataIO {
+ public:
+  explicit DataIO(const std::string &filename) { data_filen_path_ = filename; }
 
-class PcapIO {
+  virtual ~DataIO() = default;
+
+  using MessageProcessFunction = std::function<bool(const rosbag2_storage::SerializedBagMessageSharedPtr m)>;
+
+  using PointCloud2Handle = std::function<bool(PointCloud2MsgPtr)>;
+
+  using ImuHandle = std::function<bool(IMUPtr)>;
+
+
+
+  virtual void go() = 0;
+
+  DataIO &addHandle(const std::string &topic_name, MessageProcessFunction func) {
+    process_func_.emplace(topic_name, func);
+    return *this;
+  }
+
+
+  virtual DataIO &addPointCloud2Handle(const std::string &topic_name, PointCloud2Handle f) = 0;
+
+
+  virtual DataIO &addIMUHandle(const std::string &topic_name, ImuHandle f) = 0;
+
+  void cleanProcessFunc() { process_func_.clear(); }
+
+ protected:
+
+  std::map<std::string, MessageProcessFunction> process_func_;
+
+  std::string data_filen_path_;
+};
+
+
+class PcapIO : public DataIO 
+{
  public:
   explicit PcapIO(const std::string &filename, const int32_t &pointcloud_port, const int32_t &imu_port)
       : filename_(filename), pointcloud_port_(pointcloud_port), imu_port_(imu_port)
@@ -38,16 +75,20 @@ class PcapIO {
     //处理每个packet
     PacketType parsePacket(const PacketInfo &info);
 
-    void go();
+    void go() override;
+
+        DataIO &addPointCloud2Handle(const std::string &topic_name, PointCloud2Handle f) override;
+        DataIO &addIMUHandle(const std::string &topic_name, ImuHandle f) override;
 
     private:
+
         std::string filename_;
         int32_t pointcloud_port_;
         int32_t imu_port_;
 
 
         IMUPtr imu_msg_;               ///< IMU消息
-        std::shared_ptr<PointCloudMsg> lidar_msg_;
+        PointCloud2MsgPtr lidar_msg_;  ///< 点云消息
 
 
         uint16_t last_imu_cnt_ = 0;    ///< imu packet计数
@@ -267,8 +308,11 @@ void PcapIO::go() {
 
     switch (res) {
       case PacketType::IMU:
+            process_func_["/livox/imu"](nullptr);
+
         break;
       case PacketType::LIDARFULL:
+            process_func_["/livox/lidar"](nullptr);
         break;
 
       default:
@@ -279,4 +323,12 @@ void PcapIO::go() {
 
   // 关闭pcap文件
   pcap_close(handle);
+}
+
+DataIO& PcapIO::addPointCloud2Handle(const std::string&, PointCloud2Handle f) {
+  return addHandle("/livox/lidar", [&f, this](const auto&) -> bool { return f(lidar_msg_); });
+}
+
+DataIO& PcapIO::addIMUHandle(const std::string&, ImuHandle f) {
+  return addHandle("/livox/imu", [&f, this](const auto&) -> bool { return f(imu_msg_); });
 }
