@@ -1,22 +1,9 @@
-/**
- * @file ui_cloud.h
- * @author uanheng (uanheng@foxmail.com)
- * @brief 点云显示绘制
- * @version 0.1
- * @date 2025-05-06
- *
- * @copyright Copyright (c) 2025
- *
- */
 
 #pragma once
 
-#include "common/types/eigen_types.h"
-#include "common/types/point_types.h"
+#include "msg_types.h"
 
 #include <pangolin/gl/glvbo.h>
-
-namespace slam_tools::ui {
 
 /// 在UI中使用的点云
 /// 固定不变的点云都可以用这个来渲染
@@ -31,6 +18,7 @@ class UiCloud {
   };
 
   UiCloud() {}
+  
   explicit UiCloud(CloudPtr cloud);
 
   /**
@@ -46,6 +34,7 @@ class UiCloud {
   void setRenderColor(UseColor use_color);
 
  private:
+
   Vec4f intensityToRgbPCL(const float& intensity) const {
     int index = static_cast<int>(intensity * 6);
     index = static_cast<int>(index % intensity_color_table_pcl_.size());
@@ -68,4 +57,3 @@ class UiCloud {
   static std::vector<Vec4f> intensity_color_table_pcl_;
 };
 
-}  // namespace slam_tools::ui

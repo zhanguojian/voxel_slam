@@ -1,51 +1,32 @@
 #pragma once
 
 #include "imu_process.h"
+#include <fstream>
+#include <functional>
+#include <unordered_map>
+
 
 class Mapper
 {
     public:
-        Mapper();
+        explicit Mapper(const RunConfig& config);
         ~Mapper();
 
-        void initializeFiles();
-
-        void Process(const MeasureGroup &meas, StatesGroup &state_inout);
-
-        void gravityAlignment();
-        void handleFirstFrame();
-
-        void setComponentParams();
-
-        bool sync_packages(MeasureGroup &meas);
-
-        void handleLIO() 
-
         void run();
-        void savePCD();
-        void processImu();
-
-        void prop_imu_once(StatesGroup &imu_prop_state, const double dt, V3D acc_avr, V3D angvel_avr);
-        void imu_prop_callback();
-
-        void transformLidar(const Eigen::Matrix3d rot, const Eigen::Vector3d t, const PointCloudXYZI::Ptr &input_cloud, PointCloudXYZI::Ptr &trans_cloud);
-        void pointBodyToWorld(const PointType &pi, PointType &po);
-        
-        // void standard_pcl_cbk(const sensor_msgs::msg::PointCloud2::ConstSharedPtr &msg);
-        // void livox_pcl_cbk(const livox_ros_driver2::msg::CustomMsg::ConstSharedPtr &msg_in);
-        // void imu_cbk(const sensor_msgs::msg::Imu::ConstSharedPtr &msg_in);
-
-        template <typename T> void set_posestamp(T &out);
-        template <typename T> void pointBodyToWorld(const Eigen::Matrix<T, 3, 1> &pi, Eigen::Matrix<T, 3, 1> &po);
-        template <typename T> Eigen::Matrix<T, 3, 1> pointBodyToWorld(const Eigen::Matrix<T, 3, 1> &pi);
 
 
 
     private:
 
-        pcl::VoxelGrid<PointType> downSizeFilterSurf;
+        bool sync_packages(MeasureGroup &meas)
 
-        V3D euler_cur;
+        void savePCD();
+
+        void process(const MeasureGroup& measures);
+
+        struct MapCell { V3D sum=V3D::Zero(); double intensity=0; uint64_t count=0; };
+
+        RunConfig config_;
 
         MeasureGroup LidarMeasures;
         StatesGroup _state;
@@ -55,61 +36,28 @@ class Mapper
         
         VoxelMapManagerPtr voxelmap_manager;
 
-        std::mutex mtx_buffer, mtx_buffer_imu_prop;
-
-        std::condition_variable sig_buffer;
-
-        
-        string root_dir;
-        string lid_topic, imu_topic;
-
-        V3D extT;
-        M3D extR;
-
-        StatesGroup imu_propagate, latest_ekf_state;
+        StatesGroup state_;
 
 
-        double res_mean_last = 0.05;
+        std::deque<LidarFrame> lidar_buffer_;
+        std::deque<ImuSample> imu_buffer_;
 
-        double gyr_cov = 0, acc_cov = 0, inv_expo_cov = 0;
+        std::unordered_map<VOXEL_LOCATION,MapCell> output_map_;
 
-        double last_timestamp_lidar = -1.0, last_timestamp_imu = -1.0;
+        std::filesystem::path run_directory_;
 
+        std::ofstream trajectory_;
 
-        bool lidar_pushed = false, imu_en, gravity_est_en, flg_reset = false, ba_bg_est_en = true;
+        bool map_initialized_=false;
 
+        size_t processed_=0, skipped_=0, unmatched_=0;
 
-    
-    private:
-
-
-        std::unordered_map<VOXEL_LOCATION, VoxelOctoTree *> voxel_map;
-
-        int grid_size, patch_size, grid_n_width, grid_n_height, patch_pyrimid_level;
-
-        double filter_size_surf_min = 0;
-        double filter_size_pcd = 0;
-        double _first_lidar_time = 0.0;
-
-        int feats_down_size = 0, max_iterations = 0;
+        std::function<void(PointCloudXYZI::ConstPtr,const StatesGroup&)> display_;
 
 
-        PointCloudXYZI::Ptr visual_sub_map;
         PointCloudXYZI::Ptr feats_undistort;
         PointCloudXYZI::Ptr feats_down_body;
-        PointCloudXYZI::Ptr feats_down_world;
-        PointCloudXYZI::Ptr pcl_w_wait_pub;
-        PointCloudXYZI::Ptr pcl_wait_pub;
-        PointCloudXYZRGB::Ptr pcl_wait_save;
-        PointCloudXYZI::Ptr pcl_wait_save_intensity;
 
-    private:
 
-        int frame_num = 0;
-        double aver_time_consu = 0;
-        double aver_time_icp = 0;
-        double aver_time_map_inre = 0;
-
-        std::string pcap_file;
 };
 

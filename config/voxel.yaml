@@ -1,0 +1,51 @@
+# 相对路径以本 YAML 所在目录为基准，不以启动终端所在目录为基准。
+source_path: /data/bag/input.pcap
+output_path: /output
+pointcloud_port: 56301
+imu_port: 56401
+
+# 以首个有效 LiDAR 包时间为锚点，在雷达时钟上按时间窗分帧；不是固定点数。
+frame_duration: 0.1
+blind: 0.5
+max_range: 100.0
+point_filter_num: 1
+# 默认不猜测 tag 位含义；需要过滤时按设备协议配置掩码和允许值。
+tag_mask: 0
+tag_value: 0
+filter_size: 0.2
+save_voxel_size: 0.1
+
+# p_imu = extrinsic_R * p_lidar + extrinsic_T；必须替换为你的标定值。
+extrinsic_T: [-0.011, -0.02329, 0.04412]
+extrinsic_R: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+
+# 开始采集时保持静止；样本数不是 LiDAR 帧数。
+imu_init_samples: 200
+init_gyro_std: 0.05
+init_accel_std: 0.5
+# 连续时间噪声密度，进入协方差传播前平方；不是旧程序的直接方差参数。
+gyro_noise: 0.01
+accel_noise: 0.1
+gyro_bias_noise: 0.0001
+accel_bias_noise: 0.0001
+max_imu_gap: 0.05
+gravity_align: true
+
+voxel_size: 0.5
+max_layer: 2
+layer_init_num: [5, 5, 5]
+max_points_num: 50
+max_iterations: 5
+plane_threshold: 0.01  # 点分布最小特征值，单位 m²
+beam_err: 0.02        # 角度标准差，单位度
+range_err: 0.05       # 距离标准差，单位 m
+sigma_num: 3.0
+map_sliding_en: true
+half_map_size: 100    # 顶层体素数量，不是米
+sliding_thresh: 8.0   # 米
+
+viewer: false
+viewer_scans: 100
+save_scans: false     # 保存每帧去畸变后的 LiDAR 坐标点云
+max_pending_frames: 100
+max_imu_samples: 200000

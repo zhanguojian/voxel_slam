@@ -1,17 +1,7 @@
-/**
- * @file ui_trajectory.cc
- * @author uanheng (uanheng@foxmail.com)
- * @brief 轨迹绘制
- * @version 0.1
- * @date 2025-05-06
- *
- * @copyright Copyright (c) 2025
- *
- */
+
 
 #include "ui_trajectory.h"
 
-namespace slam_tools::ui {
 
 void UiTrajectory::addPt(const SE3& pose) {
   pos_.emplace_back(pose.translation().cast<float>());
@@ -38,4 +28,3 @@ void UiTrajectory::render() {
   glPointSize(1.0);
 }
 
-}  // namespace slam_tools::ui

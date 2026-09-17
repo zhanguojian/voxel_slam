@@ -4,26 +4,35 @@
 
 #include "yaml_config.hpp"
 
+
+DEFINE_int32(glog_level, 0, "日志等级");
+DEFINE_string(config_file, "../voxel.yaml", "配置文件路径");
+
 int main(int argc, char** argv) {
 
-
     // 1.0 初始化gflags
-    std::string version(SLAM_TOOLS_VERSION);
     google::SetVersionString(version);
     google::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
 
-    // 2.0 配置读取
-    YamlConfig yaml_config(FLAGS_config_file);
-    RunConfig config;
-    {
-    config.source_path_ = SLAM_TOOLS_DATA_PATH + yaml_config.get("source_path", std::string("/bag/"));
-    config.imu_topic_ = yaml_config.get("imu_topic", std::string("/livox/imu"));
-    config.lidar_topic_ = yaml_config.get("lidar_topic", std::string("/livox/lidar"));
-    config.pointcloud_port_ = yaml_config.get("pointcloud_port", 56301);
-    config.imu_port_ = yaml_config.get("imu_port", 56401);
+    FLAGS_logtostderr=true;
 
-    LOG(INFO) << "source path: " << config.source_path_;
-    LOG(INFO) << "imu topic: " << config.imu_topic_;
-    LOG(INFO) << "cloud topic: " << config.lidar_topic_;
+    int result=0;
+
+    try {
+        std::filesystem::path config="config/voxel.yaml";
+
+        // 默认限制线程数，可用 OMP_NUM_THREADS 覆盖。
+        if(!std::getenv("OMP_NUM_THREADS")) omp_set_num_threads(std::min(4,omp_get_max_threads()));
+
+        Mapper mapper(loadConfig(config));
+        mapper.run();
+        
+    } catch(const std::exception& e) 
+    {
+        LOG(ERROR)<<e.what(); result=1;
     }
+
+    google::ShutdownGoogleLogging();
+    return result;
+}

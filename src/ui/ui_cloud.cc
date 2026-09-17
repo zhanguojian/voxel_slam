@@ -1,20 +1,8 @@
-/**
- * @file ui_cloud.cc
- * @author uanheng (uanheng@foxmail.com)
- * @brief 点云显示绘制
- * @version 0.1
- * @date 2025-05-06
- *
- * @copyright Copyright (c) 2025
- *
- */
 
 #include "ui_cloud.h"
 
 #include <execution>
 #include <numeric>
-
-namespace slam_tools::ui {
 
 std::vector<Vec4f> UiCloud::intensity_color_table_pcl_;
 
@@ -96,4 +84,3 @@ void UiCloud::setRenderColor(UiCloud::UseColor use_color) {
   }
 }
 
-}  // namespace slam_tools::ui

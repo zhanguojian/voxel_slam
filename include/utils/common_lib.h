@@ -20,35 +20,35 @@
 #define VEC_FROM_ARRAY(v) v[0], v[1], v[2]
 #define MAT_FROM_ARRAY(v) v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7], v[8]
 
-struct MeasureGroup
-{
-  double lidar_frame_beg_time;
-  double lidar_frame_end_time;
-  double last_lio_update_time;
+// struct MeasureGroup
+// {
+//   double lidar_frame_beg_time;
+//   double lidar_frame_end_time;
+//   double last_lio_update_time;
 
-  PointCloudXYZI::Ptr lidar;
-  PointCloudXYZI::Ptr pcl_proc_cur;
-  PointCloudXYZI::Ptr pcl_proc_next;
+//   PointCloudXYZI::Ptr lidar;
+//   PointCloudXYZI::Ptr pcl_proc_cur;
+//   PointCloudXYZI::Ptr pcl_proc_next;
 
-  deque<sensor_msgs::msg::Imu::ConstSharedPtr> imu;
+//   deque<sensor_msgs::msg::Imu::ConstSharedPtr> imu;
 
-  int lidar_scan_index_now;
+//   int lidar_scan_index_now;
 
-  LidarMeasureGroup()
-  {
-    lidar_frame_beg_time = -0.0;
-    lidar_frame_end_time = 0.0;
-    last_lio_update_time = -1.0;
+//   LidarMeasureGroup()
+//   {
+//     lidar_frame_beg_time = -0.0;
+//     lidar_frame_end_time = 0.0;
+//     last_lio_update_time = -1.0;
 
-    this->lidar.reset(new PointCloudXYZI());
-    this->pcl_proc_cur.reset(new PointCloudXYZI());
-    this->pcl_proc_next.reset(new PointCloudXYZI());
-    this->imu.clear();
+//     this->lidar.reset(new PointCloudXYZI());
+//     this->pcl_proc_cur.reset(new PointCloudXYZI());
+//     this->pcl_proc_next.reset(new PointCloudXYZI());
+//     this->imu.clear();
 
-    lidar_scan_index_now = 0;
-    last_lio_update_time = -1.0;
-  };
-};
+//     lidar_scan_index_now = 0;
+//     last_lio_update_time = -1.0;
+//   };
+// };
 
 typedef struct pointWithVar
 {

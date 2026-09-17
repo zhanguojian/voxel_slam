@@ -10,11 +10,8 @@
 
 class YamlConfig {
  public:
-  /**
-   * @brief Construct a new Yaml Config object
-   *
-   * @param path 配置文件路径
-   */
+
+  //显式构造yaml类
   explicit YamlConfig(const std::string &path) {
     try {
       std::ifstream fin(path);
@@ -28,77 +25,75 @@ class YamlConfig {
 
       valid_ = true;
       LOG(INFO) << "加载配置文件路径为：" << path;
-    } catch (const YAML::ParserException &e) {
+
+    } catch (const YAML::ParserException &e) 
+    {
       LOG(ERROR) << "配置文件格式错误：" << e.what();
       valid_ = false;
     }
   }
 
-  /**
-   * @brief 是否合法
-   *
-   * @return true 合法
-   * @return false 不合法
-   */
+  //它就是整个配置类的状态标志。成功为true
   bool valid() const { return valid_; }
 
-  /**
-   * @brief key读取
-   *
-   * @tparam T 模板类型
-   * @param key key
-   * @param default_value 默认值
-   * @return T 返回key值
-   */
+
+
+  // 读取一级 YAML 配置。
   template <typename T>
-  T get(const std::string &key, const T &default_value) const {
-    if (!valid_ || !node_[key]) {
+  T get(const std::string &key, const T &default_value) const 
+  {
+
+    if (!valid_ || !node_[key]) 
+    {
       LOG(WARNING) << "使用默认值：" << key << " = " << toString(default_value);
       return default_value;
     }
 
-    try {
+    try 
+    {
       T value = node_[key].as<T>();
       LOG(INFO) << "读取配置项：" << key << " = " << toString(value);
       return value;
-    } catch (const YAML::TypedBadConversion<T> &) {
+
+    } catch (const YAML::TypedBadConversion<T> &) 
+    {
       LOG(WARNING) << "类型转换错误：" << key << "，使用默认值 " << toString(default_value);
       return default_value;
     }
   }
 
-  /**
-   * @brief 多层key读取（支持 \. 作为字面点）
-   *
-   * @tparam T 模板类型
-   * @param path YAML文件路径
-   * @param default_value 默认值
-   * @return T 返回key值
-   */
+
+  //多级yaml配置读取
   template <typename T>
-  T getPath(const std::string &path, const T &default_value) const {
+  T getPath(const std::string &path, const T &default_value) const 
+  {
     if (!valid_) {
       LOG(WARNING) << "非法配置文件，使用默认值：" << path;
       return default_value;
     }
 
+    //读取分级的层
     std::vector<std::string> keys = splitPath(path);
 
-    const YAML::Node *cur = &node_;
+    //获取初始化头节点
+    const YAML::Node cur = &node_;
 
+    //逐层读取。  
     for (const auto &key : keys) {
+      //node树节点也就是map
       if (!cur->IsMap()) {
         LOG(WARNING) << "配置项不存在：" << path;
         return default_value;
       }
 
+      //更新树的头结点
       const YAML::Node next = (*cur)[key];
       if (!next) {
         LOG(WARNING) << "配置项不存在：" << path;
         return default_value;
       }
 
-      cur = &next;  // 继续向下
+      cur = next;  // 继续向下
     }
 
     try {
@@ -111,11 +106,8 @@ class YamlConfig {
     }
   }
 
-  /**
-   * @brief 打印所有key
-   *
-   */
-  void printAllKeys() const {
+  void printAllKeys() const 
+  {
     if (!valid_) {
       LOG(WARNING) << "配置文件无效，无法打印 keys";
       return;
@@ -127,13 +119,9 @@ class YamlConfig {
   YAML::Node node_;     ///< yaml解析节点
   bool valid_ = false;  ///< 是否合法
 
-  /**
-   * @brief 路径分割函数（支持 \. ）
-   *
-   * @param path 路径
-   * @return std::vector<std::string> 分割后字符串
-   */
-  static std::vector<std::string> splitPath(const std::string &path) {
+
+  static std::vector<std::string> splitPath(const std::string &path) 
+  {
     std::vector<std::string> result;
     std::string cur;
     bool escape = false;
@@ -156,13 +144,7 @@ class YamlConfig {
     return result;
   }
 
-  /**
-   * @brief  类型统一转string
-   *
-   * @tparam U 模板变量类型
-   * @param value key值
-   * @return std::string 返回字符串
-   */
+
   template <typename U>
   static std::string toString(const U &value) {
     std::ostringstream oss;
@@ -170,13 +152,7 @@ class YamlConfig {
     return oss.str();
   }
 
-  /**
-   * @brief vector 类型转换特化
-   *
-   * @tparam U 模板变量类型
-   * @param vec key值
-   * @return std::string 返回字符串
-   */
+
   template <typename U>
   static std::string toString(const std::vector<U> &vec) {
     std::ostringstream oss;
@@ -191,29 +167,14 @@ class YamlConfig {
     return oss.str();
   }
 
-  /**
-   * @brief bool类型转换特化
-   *
-   * @param value key值
-   * @return std::string 返回字符串
-   */
   static std::string toString(bool value) { return value ? "true" : "false"; }
 
-  /**
-   * @brief 字符串类型转换特化
-   *
-   * @param value key值
-   * @return std::string 返回字符串
-   */
+
   static std::string toString(const std::string &value) { return "\"" + value + "\""; }
 
-  /**
-   * @brief 打印所有节点
-   *
-   * @param node 根节点
-   * @param prefix 叶节点key
-   */
-  static void printNode(const YAML::Node &node, const std::string &prefix) {
+
+  static void printNode(const YAML::Node &node, const std::string &prefix) 
+  {
     if (node.IsMap()) {
       for (auto it = node.begin(); it != node.end(); ++it) {
         std::string key = it->first.as<std::string>();
@@ -230,18 +191,14 @@ class YamlConfig {
   }
 };
 
-/**
- * @brief 函数模板显式特化
- *
- * @tparam
- * @param key
- * @param default_value
- * @return YAML::Node
- */
+
 template <>
-inline YAML::Node YamlConfig::get<YAML::Node>(const std::string &key, const YAML::Node &default_value) const {
-  if (!valid_ || !node_[key]) {
+inline YAML::Node YamlConfig::get<YAML::Node>(const std::string &key, const YAML::Node &default_value) const 
+{
+  if (!valid_ || !node_[key]) 
+  {
     return default_value;
   }
+
   return node_[key];
 }

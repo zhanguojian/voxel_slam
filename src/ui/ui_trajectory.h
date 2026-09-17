@@ -1,21 +1,11 @@
-/**
- * @file ui_trajectory.h
- * @author uanheng (uanheng@foxmail.com)
- * @brief 轨迹绘制
- * @version 0.1
- * @date 2025-05-06
- *
- * @copyright Copyright (c) 2025
- *
- */
+
 
 #pragma once
 
-#include "common/types/eigen_types.h"
+#include "msg_types.h"
 
 #include <pangolin/gl/glvbo.h>
 
-namespace slam_tools::ui {
 
 /// UI中的轨迹绘制
 class UiTrajectory {
@@ -41,4 +31,3 @@ class UiTrajectory {
   pangolin::GlBuffer vbo_;       // 显存顶点信息
 };
 
-}  // namespace slam_tools::ui

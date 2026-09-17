@@ -1,150 +1,76 @@
 #include "imu_process.h"
 
-#include "IMU_Processing.h"
 #include <rcpputils/asserts.hpp>
 
 const bool time_list(PointType &x, PointType &y) { return (x.curvature < y.curvature); }
 
-ImuProcess::ImuProcess() : Eye3d(M3D::Identity()),
-                           Zero3d(0, 0, 0), b_first_frame(true), imu_need_init(true)
+
+
+bool ImuProcess::initialize(const MeasureGroup& m, StatesGroup& s) 
 {
-  init_iter_num = 1;
 
-  cov_acc = V3D(0.1, 0.1, 0.1);
-  cov_gyr = V3D(0.1, 0.1, 0.1);
-  cov_bias_gyr = V3D(0.1, 0.1, 0.1);
-  cov_bias_acc = V3D(0.1, 0.1, 0.1);
+  for(const auto& sample:m.imu) 
+  {
+    if(sample.time<=last_init_time_ || sample.time>m.lidar.end) continue;
 
-  cov_inv_expo = 0.2;
+    last_init_time_=sample.time;
 
-  mean_acc = V3D(0, 0, -1.0);
-  mean_gyr = V3D(0, 0, 0);
+    ++init_count_;
 
-  angvel_last = Zero3d;
-  acc_s_last = Zero3d;
-  Lid_offset_to_IMU = Zero3d;
-  Lid_rot_to_IMU = Eye3d;
+    const V3D da=sample.accel-mean_acc_, dg=sample.gyro-mean_gyr_;
 
-  last_imu.reset(new sensor_msgs::msg::Imu());
-  cur_pcl_un_.reset(new PointCloudXYZI());
+    mean_acc_+=da/init_count_; mean_gyr_+=dg/init_count_;
+
+    m2_acc_+=da.cwiseProduct(sample.accel-mean_acc_);
+
+    m2_gyr_+=dg.cwiseProduct(sample.gyro-mean_gyr_);
+  }
+
+  if(init_count_<config_.imu_init_samples)
+  {
+    return false;
+  }
+
+  if(std::sqrt(m2_acc_.sum()/(init_count_-1))>config_.init_accel_std ||
+     std::sqrt(m2_gyr_.sum()/(init_count_-1))>config_.init_gyro_std ||
+     mean_gyr_.norm()>0.2 || std::abs(mean_acc_.norm()-G_m_s2)>2.0)
+  {
+
+    LOG(ERROR)<<"IMU initialization is not stationary or has wrong acceleration units; restart with a stationary segment";
+  }
+
+
+  s.bias_g  = mean_gyr_;
+
+  s.bias_a.setZero(); // 静止均值不能独立区分所有加计偏置与重力方向。
+
+  if(config_.gravity_align) 
+  {
+    s.rot_end=Eigen::Quaterniond::FromTwoVectors(mean_acc_,V3D(0,0,G_m_s2)).toRotationMatrix();
+    s.gravity=V3D(0,0,-G_m_s2);
+  } else 
+  {
+    s.rot_end.setIdentity();
+    s.gravity=-G_m_s2*mean_acc_.normalized();
+  }
+
+  s.cov.setIdentity(); 
+  s.cov*=0.01;
+
+  s.cov.block<3,3>(9,9)=M3D::Identity()*1e-5;
+  s.cov.block<3,3>(12,12)=M3D::Identity()*1e-4;
+  s.cov.block<3,3>(15,15)=M3D::Identity()*1e-4;
+
+  state_time_=m.lidar.end;
+
+  initialized_=true;
+
+  LOG(INFO)<<"IMU initialized: samples="<<init_count_<<", gravity="<<s.gravity.transpose()
+           <<", gyro bias="<<s.bias_g.transpose();
+  return true;
 }
 
-ImuProcess::~ImuProcess() {}
 
-
-void ImuProcess::Reset()
-{
-  LOG(INFO) << "Reset ImuProcess";
-  mean_acc = V3D(0, 0, -1.0);
-  mean_gyr = V3D(0, 0, 0);
-  angvel_last = Zero3d;
-  imu_need_init = true;
-  init_iter_num = 1;
-  IMUpose.clear();
-  last_imu.reset(new sensor_msgs::msg::Imu());
-  cur_pcl_un_.reset(new PointCloudXYZI());
-}
-
-void ImuProcess::disable_imu()
-{
-  LOG(INFO) << "IMU Disabled !!!!!";
-
-  imu_en = false;
-  imu_need_init = false;
-}
-
-void ImuProcess::disable_gravity_est()
-{
-  LOG(INFO) << "Online Gravity Estimation Disabled !!!!!";
-  gravity_est_en = false;
-}
-
-void ImuProcess::disable_bias_est()
-{
-  LOG(INFO) << "Bias Estimation Disabled !!!!!";
-  ba_bg_est_en = false;
-}
-
-void ImuProcess::set_extrinsic(const MD(4, 4) & T)
-{
-  Lid_offset_to_IMU = T.block<3, 1>(0, 3);
-  Lid_rot_to_IMU = T.block<3, 3>(0, 0);
-}
-
-void ImuProcess::set_extrinsic(const V3D &transl)
-{
-  Lid_offset_to_IMU = transl;
-  Lid_rot_to_IMU.setIdentity();
-}
-
-void ImuProcess::set_extrinsic(const V3D &transl, const M3D &rot)
-{
-  Lid_offset_to_IMU = transl;
-  Lid_rot_to_IMU = rot;
-}
-
-void ImuProcess::set_gyr_cov_scale(const V3D &scaler) { cov_gyr = scaler; }
-
-void ImuProcess::set_acc_cov_scale(const V3D &scaler) { cov_acc = scaler; }
-
-void ImuProcess::set_gyr_bias_cov(const V3D &b_g) { cov_bias_gyr = b_g; }
-
-void ImuProcess::set_inv_expo_cov(const double &inv_expo) { cov_inv_expo = inv_expo; }
-
-void ImuProcess::set_acc_bias_cov(const V3D &b_a) { cov_bias_acc = b_a; }
-
-void ImuProcess::set_imu_init_frame_num(const int &num) { MAX_INI_COUNT = num; }
-
-void ImuProcess::IMU_init(const MeasureGroup &meas, StatesGroup &state_inout, int &N)
-{
-    LOG(INFO) << "IMU init  " << double(N) / MAX_INI_COUNT * 100 << " % " << " IMU measurements";
-
-    V3D cur_acc, cur_gyr;
-
-
-    if (b_first_frame)
-    {
-        Reset();
-        N = 1;
-        b_first_frame = false;
-        const auto &imu_acc = meas.imu.front()->linear_acceleration;
-        const auto &gyr_acc = meas.imu.front()->angular_velocity;
-        mean_acc << imu_acc.x, imu_acc.y, imu_acc.z;
-        mean_gyr << gyr_acc.x, gyr_acc.y, gyr_acc.z;
-        // first_lidar_time = meas.lidar_frame_beg_time;
-        LOG(INFO) << "init acc norm: " << mean_acc.norm();
-    }
-
-    for (const auto &imu : meas.imu)
-    {
-        const auto &imu_acc = imu->linear_acceleration;
-        const auto &gyr_acc = imu->angular_velocity;
-        cur_acc << imu_acc.x, imu_acc.y, imu_acc.z;
-        cur_gyr << gyr_acc.x, gyr_acc.y, gyr_acc.z;
-
-        mean_acc += (cur_acc - mean_acc) / N;
-        mean_gyr += (cur_gyr - mean_gyr) / N;
-
-        // cov_acc = cov_acc * (N - 1.0) / N + (cur_acc -
-        // mean_acc).cwiseProduct(cur_acc - mean_acc) * (N - 1.0) / (N * N); cov_gyr
-        // = cov_gyr * (N - 1.0) / N + (cur_gyr - mean_gyr).cwiseProduct(cur_gyr -
-        // mean_gyr) * (N - 1.0) / (N * N);
-
-        LOG(INFO) << "acc norm: " << cur_acc.norm() << " " << mean_acc.norm();
-        LOG(INFO) << "gyr norm: " << cur_gyr.norm() << " " << mean_gyr.norm();
-
-        N++;
-    }
-
-    IMU_mean_acc_norm = mean_acc.norm();
-
-    state_inout.gravity = -mean_acc / mean_acc.norm() * G_m_s2;
-    state_inout.rot_end = Eye3d; // Exp(mean_acc.cross(V3D(0, 0, -1 / scale_gravity)));
-    state_inout.bias_g = Zero3d; // mean_gyr;
-
-    last_imu = meas.imu.back();
-
-}
 
 
 //待修正
@@ -323,7 +249,7 @@ void ImuProcess::UndistortPcl(LidarMeasureGroup &lidar_meas, StatesGroup &state_
 }
 
 
-void ImuProcess::Process2(LidarMeasureGroup &lidar_meas, StatesGroup &stat, PointCloudXYZI::Ptr cur_pcl_un_)
+void ImuProcess::Process(LidarMeasureGroup &lidar_meas, StatesGroup &stat, PointCloudXYZI::Ptr cur_pcl_un_)
 {
   double t1, t2, t3;
   t1 = omp_get_wtime();

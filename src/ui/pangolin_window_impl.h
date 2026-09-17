@@ -1,31 +1,20 @@
-/**
- * @file pangolin_window_impl.h
- * @author uanheng (uanheng@foxmail.com)
- * @brief
- * @version 0.1
- * @date 2025-05-08
- *
- * @copyright Copyright (c) 2025
- *
- */
 
 #pragma once
 
 // include pangolin先于pcl, 消除HAVE_OPENNI的编译警告
 #include <pangolin/pangolin.h>
 
-#include "common/types/point_types.h"
-#include "tools/ui/pangolin_window.h"
-#include "tools/ui/ui_car.h"
-#include "tools/ui/ui_cloud.h"
-#include "tools/ui/ui_trajectory.h"
+#include "msg_types.h"
+#include "pangolin_window.h"
+#include "ui_car.h"
+#include "ui_cloud.h"
+#include "ui_trajectory.h"
 
 #include <atomic>
 #include <mutex>
 #include <string>
 #include <thread>
 
-namespace slam_tools::ui {
 
 struct UiFrame;
 
@@ -163,4 +152,3 @@ class PangolinWindowImpl {
   std::unique_ptr<pangolin::Plotter> plotter_bias_gyr_ = nullptr;
 };
 
-}  // namespace slam_tools::ui

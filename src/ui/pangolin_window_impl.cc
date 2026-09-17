@@ -1,21 +1,11 @@
-/**
- * @file pangolin_window_impl.cc
- * @author uanheng (uanheng@foxmail.com)
- * @brief
- * @version 0.1
- * @date 2025-05-08
- *
- * @copyright Copyright (c) 2025
- *
- */
+
 
 #include <glog/logging.h>
 #include <string>
 
 #include <pangolin/display/default_font.h>
-#include "tools/ui/pangolin_window_impl.h"
+#include "pangolin_window_impl.h"
 
-namespace slam_tools::ui {
 
 using UL = std::unique_lock<std::mutex>;
 
@@ -328,4 +318,3 @@ void PangolinWindowImpl::allocateBuffer() {
 
 void PangolinWindowImpl::releaseBuffer() {}
 
-}  // namespace slam_tools::ui

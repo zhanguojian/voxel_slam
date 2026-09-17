@@ -1,19 +1,9 @@
-/**
- * @file pangolin_window.cc
- * @author uanheng (uanheng@foxmail.com)
- * @brief
- * @version 0.1
- * @date 2025-05-08
- *
- * @copyright Copyright (c) 2025
- *
- */
 
-#include "tools/ui/pangolin_window.h"
-#include "tools/ui/pangolin_window_impl.h"
+
+#include "pangolin_window.h"
+#include "pangolin_window_impl.h"
 
 #include <glog/logging.h>
-namespace slam_tools::ui {
 
 PangolinWindow::PangolinWindow() { impl_ = std::make_shared<PangolinWindowImpl>(); }
 PangolinWindow::~PangolinWindow() { quit(); }
@@ -84,4 +74,3 @@ void PangolinWindow::setTImuLidar(const SE3& T_imu_lidar) { impl_->T_imu_lidar_ 
 
 bool PangolinWindow::shouldQuit() { return pangolin::ShouldQuit(); }
 
-}  // namespace slam_tools::ui

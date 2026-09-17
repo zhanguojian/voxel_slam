@@ -1,13 +1,4 @@
-/**
- * @file pangolin_window.h
- * @author uanheng (uanheng@foxmail.com)
- * @brief
- * @version 0.1
- * @date 2025-05-08
- *
- * @copyright Copyright (c) 2025
- *
- */
+
 
 #pragma once
 
@@ -19,7 +10,6 @@
 #include <map>
 #include <memory>
 
-namespace slam_tools::ui {
 
 class PangolinWindowImpl;
 
@@ -68,4 +58,3 @@ class PangolinWindow {
  private:
   std::shared_ptr<PangolinWindowImpl> impl_ = nullptr;
 };
-}  // namespace slam_tools::ui

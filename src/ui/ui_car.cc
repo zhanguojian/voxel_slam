@@ -1,18 +1,5 @@
-/**
- * @file ui_car.cc
- * @author uanheng (uanheng@foxmail.com)
- * @brief 坐标轴绘制
- * @version 0.1
- * @date 2025-05-06
- *
- * @copyright Copyright (c) 2025
- *
- */
 
 #include "ui_car.h"
-
-namespace slam_tools::ui {
-
 std::vector<Vec3f> UiCar::car_vertices_ = {
     // clang-format off
      { 0, 0, 0}, { 5, 0, 0},
@@ -44,4 +31,3 @@ void UiCar::render() {
   }
 }
 
-}  // namespace slam_tools::ui
